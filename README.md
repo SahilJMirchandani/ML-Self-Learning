@@ -70,7 +70,6 @@ The dataset contains transactions from:
 
 The complete machine learning workflow is:
 
-```text
 UCI Online Retail Dataset
           |
           v
