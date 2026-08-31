@@ -1,0 +1,3 @@
+Model,Validation_MAE,Validation_RMSE,Validation_R2,Test_MAE,Test_RMSE,Test_R2
+Baseline Random Forest,11832.75,17825.08,0.3743,20713.04,31040.85,0.0926
+Tuned Random Forest,11595.92,17508.3,0.3964,18918.01,29559.63,0.1771
