@@ -1,0 +1,23 @@
+artifact_path: file:C:/Users/Sahil/Desktop/ML_Self_Learning/mlruns/1/models/m-2f413a58ae45424e9785b6f57a5129d2/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.skops
+    predict_fn: predict
+    python_version: 3.14.3
+  sklearn:
+    code: null
+    pickled_model: model.skops
+    serialization_format: skops
+    sklearn_version: 1.9.0
+    skops_trusted_types: null
+mlflow_version: 3.15.2
+model_id: m-2f413a58ae45424e9785b6f57a5129d2
+model_size_bytes: 1939467
+model_uuid: m-2f413a58ae45424e9785b6f57a5129d2
+prompts: null
+run_id: b4c6cb4ea6084d1f83f295b12f1e7005
+utc_time_created: '2026-09-01 13:31:45.402355'
