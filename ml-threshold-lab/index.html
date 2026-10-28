@@ -37,8 +37,8 @@
     <div class="section-head"><div><div class="eyebrow">Experiment brief</div><h2>Understand the concept before running it</h2><p>A focused experiment aligned with supervised learning and classification evaluation.</p></div></div>
     <div class="notes">
       <div class="note"><div class="symbol">🎯</div><b>Aim</b><p>Study how a Logistic Regression classification threshold changes predictions and the trade-off between precision and recall.</p></div>
-      <div class="note"><div class="symbol">🧪</div><b>Objectives</b><p>Interpret the confusion matrix; calculate classification metrics; compare thresholds on the same held-out test set; explain false positives and false negatives.</p></div>
-      <div class="note"><div class="symbol">🛠️</div><b>Tools &amp; method</b><p>Python, scikit-learn, Logistic Regression, StandardScaler and the built-in Breast Cancer Wisconsin benchmark dataset. A stratified 75/25 split is used.</p></div>
+      <div class="note"><div class="symbol">🧪</div><b>Objectives</b><p>Interpret the confusion matrix; calculate classification metrics; compare thresholds on the validation set; explain false positives and false negatives.</p></div>
+      <div class="note"><div class="symbol">🛠️</div><b>Tools &amp; method</b><p>Python, scikit-learn, Logistic Regression, StandardScaler and the built-in Breast Cancer Wisconsin benchmark dataset. A stratified 60/20/20 training, validation and final test split is used.</p></div>
     </div>
   </section>
 
@@ -295,8 +295,8 @@
       const pred=c.malignantProbability>=threshold?1:0;
       rows.push([c.id,c.actual===1?"Malignant":"Benign",pred===1?"Malignant":"Benign",c.malignantProbability.toFixed(6),pred===c.actual?"Yes":"No"]);
     });
-    const csv=rows.map(row=>row.map(v=>{const s=String(v??"");return /[",\\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(",")).join("\\r\\n");
-    const blob=new Blob(["\\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
+    const csv=rows.map(row=>row.map(v=>{const s=String(v??"");return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(",")).join("\r\n");
+    const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
     const url=URL.createObjectURL(blob),a=document.createElement("a");
     a.href=url;a.download="ml-threshold-results-"+threshold.toFixed(2)+".csv";
     document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
