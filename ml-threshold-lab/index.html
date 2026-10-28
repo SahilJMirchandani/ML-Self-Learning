@@ -29,7 +29,7 @@
     <aside class="hero-card">
       <div><div class="eyebrow">Your experiment dataset</div><h3 id="dataset-name">Breast Cancer Wisconsin (Diagnostic)</h3><p>Public benchmark dataset included with scikit-learn. No personal or patient data is entered.</p></div>
       <div><div class="big-value" id="sample-count">569</div><div style="color:var(--muted);font-size:12px">samples · 30 numerical features</div></div>
-      <div class="mini-grid"><div><b id="train-count">426</b><span>Training rows</span></div><div><b id="test-count">143</b><span>Test rows</span></div><div><b id="auc-hero">—</b><span>Test ROC-AUC</span></div></div>
+      <div class="mini-grid"><div><b id="train-count">341</b><span>Training rows</span></div><div><b id="validation-count">114</b><span>Validation rows</span></div><div><b id="test-count">114</b><span>Final test rows</span></div></div>
     </aside>
   </section>
 
@@ -44,7 +44,7 @@
 
   <div class="error" id="error-box">The trained model data could not be loaded. Refresh the page or check the server logs.</div>
   <section>
-    <div class="section-head"><div><div class="eyebrow">01 / Experiment controls</div><h2>Change the decision threshold</h2><p>All metrics below update using the same held-out test set.</p></div><button class="btn ghost" id="reset-btn">↺ Reset experiment</button></div>
+    <div class="section-head"><div><div class="eyebrow">01 / Experiment controls</div><h2>Change the decision threshold</h2><p>The slider updates validation metrics only; use the final test once after freezing a threshold.</p></div><button class="btn ghost" id="reset-btn">↺ Reset experiment</button></div>
     <div class="workspace">
       <div class="panel">
         <h3>Prediction threshold</h3><p class="sub">A case is classified as malignant when its predicted malignant probability is at least the selected threshold.</p>
@@ -52,13 +52,13 @@
         <input id="threshold-slider" type="range" min="0.05" max="0.95" step="0.01" value="0.50" aria-label="Classification threshold">
         <div class="range-ends"><span>0.05 · More sensitive</span><span>0.95 · More strict</span></div>
         <div class="preset-row"><button class="btn preset" data-threshold="0.25">Lower · 0.25</button><button class="btn preset active" data-threshold="0.50">Default · 0.50</button><button class="btn preset" data-threshold="0.75">Higher · 0.75</button></div>
-        <div class="decision-box"><strong id="decision-title">Balanced starting point</strong><p id="decision-copy">At 0.50, predicted probabilities of 50% or more count as positive (malignant). Lowering the threshold usually catches more malignant cases but may also increase false alarms.</p></div>
+        <div class="decision-box"><strong id="decision-title">Balanced starting point</strong><p id="decision-copy">At 0.50, predicted probabilities of 50% or more count as positive (malignant). Lowering the threshold usually catches more malignant cases but may also increase false alarms.</p></div><button class="btn primary" id="test-eval-btn" style="width:100%;margin-top:15px">Freeze threshold &amp; evaluate final test set</button><p style="color:var(--muted);font-size:11px;margin:8px 0 0">This freezes your selected threshold so the separate test set is not used to keep tuning it.</p>
         <div style="margin-top:20px"><div class="threshold-row"><span style="font-size:12px">Malignant cases detected</span><b id="detected-count">—</b></div><div class="barline"><span id="detected-bar"></span></div><div class="threshold-row" style="margin-top:14px"><span style="font-size:12px">Benign cases correctly cleared</span><b id="benign-count">—</b></div><div class="barline"><span id="benign-bar"></span></div></div>
         <div class="callout"><b>Important:</b> This is a learning demonstration, not a medical diagnostic tool. Model output must never replace professional medical evaluation.</div>
       </div>
 
       <div class="panel">
-        <h3>Live evaluation results</h3><p class="sub">Measured on the held-out test set at the selected threshold.</p>
+        <h3>Live validation results</h3><p class="sub">Use this validation set to explore thresholds before a final test evaluation.</p>
         <div class="metric-grid">
           <div class="metric primary-metric"><div class="label">Accuracy</div><div class="value" id="accuracy">—</div><div class="desc">Overall correct</div></div>
           <div class="metric"><div class="label">Precision</div><div class="value" id="precision">—</div><div class="desc">Correct positive predictions</div></div>
@@ -67,7 +67,7 @@
           <div class="metric"><div class="label">Specificity</div><div class="value" id="specificity">—</div><div class="desc">Benign cases correctly cleared</div></div>
           <div class="metric"><div class="label">ROC-AUC</div><div class="value" id="auc">—</div><div class="desc">Ranking quality (0–1 scale)</div></div>
         </div>
-        <div class="section-head" style="margin:20px 0 12px"><div><h2 style="font-size:16px">Confusion matrix</h2><p>Positive class = malignant</p></div></div>
+        <div class="section-head" style="margin:20px 0 12px"><div><h2 style="font-size:16px">Validation confusion matrix</h2><p>Positive class = malignant</p></div></div>
         <div class="cm-layout">
           <div class="cm" role="img" aria-label="Confusion matrix with actual rows and predicted columns">
             <div></div><div class="cm-label">Predicted<br>malignant</div><div class="cm-label">Predicted<br>benign</div>
@@ -81,6 +81,29 @@
             <div class="legend-item"><span class="swatch" style="background:#5795b4"></span><div><b>True negative (TN)</b>Benign correctly identified.</div></div>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section id="test-panel" style="display:none">
+    <div class="section-head"><div><div class="eyebrow">Final evaluation · One held-out test</div><h2>Frozen-threshold test results</h2><p id="test-summary-caption">The selected threshold is now evaluated on data not used for threshold exploration.</p></div><span class="pill"><span class="dot"></span>Threshold frozen</span></div>
+    <div class="panel">
+      <div class="metric-grid">
+        <div class="metric primary-metric"><div class="label">Test accuracy</div><div class="value" id="test-accuracy">—</div><div class="desc">Overall correct</div></div>
+        <div class="metric"><div class="label">Test precision</div><div class="value" id="test-precision">—</div><div class="desc">Positive prediction reliability</div></div>
+        <div class="metric"><div class="label">Test recall</div><div class="value" id="test-recall">—</div><div class="desc">Malignant cases detected</div></div>
+        <div class="metric"><div class="label">Test F1-score</div><div class="value" id="test-f1">—</div><div class="desc">Precision–recall balance</div></div>
+        <div class="metric"><div class="label">Test specificity</div><div class="value" id="test-specificity">—</div><div class="desc">Benign cases correctly cleared</div></div>
+        <div class="metric"><div class="label">Test ROC-AUC</div><div class="value" id="test-auc">—</div><div class="desc">Ranking quality (0–1 scale)</div></div>
+      </div>
+      <div class="cm-layout">
+        <div class="cm" role="img" aria-label="Final test-set confusion matrix">
+          <div></div><div class="cm-label">Predicted<br>malignant</div><div class="cm-label">Predicted<br>benign</div>
+          <div class="cm-label">Actual<br>malignant</div><div class="cm-cell tp"><b id="test-tp">—</b><small>True positive</small></div><div class="cm-cell fn"><b id="test-fn">—</b><small>False negative</small></div>
+          <div class="cm-label">Actual<br>benign</div><div class="cm-cell fp"><b id="test-fp">—</b><small>False positive</small></div><div class="cm-cell tn"><b id="test-tn">—</b><small>True negative</small></div>
+        </div>
+        <div class="decision-box"><strong>Why this second step matters</strong><p>You selected the threshold using validation data first. These final test metrics estimate how that choice performs on separate, previously unseen examples. Avoid changing the threshold based on these test results in a real evaluation.</p></div>
       </div>
     </div>
   </section>
@@ -102,10 +125,10 @@
   </section>
 
   <section>
-    <div class="section-head"><div><div class="eyebrow">04 / Inspect examples</div><h2>Test-set prediction explorer</h2><p>Browse individual held-out examples and see how the selected threshold classifies each probability.</p></div></div>
+    <div class="section-head"><div><div class="eyebrow">04 / Inspect examples</div><h2>Validation-case explorer</h2><p>Browse validation examples to understand how the selected threshold changes individual predictions before the final test.</p></div></div>
     <div class="panel">
       <div class="cases-tools"><button class="btn active" data-filter="all">All cases</button><button class="btn" data-filter="wrong">Misclassified only</button><button class="btn" data-filter="positive">Predicted malignant</button><span style="color:var(--muted);font-size:11px;margin-left:auto" id="case-count">—</span></div>
-      <div class="case-list" id="case-list"><div class="case-row head"><span>Test ID</span><span>Malignant probability</span><span>Actual class</span><span>Prediction</span></div></div>
+      <div class="case-list" id="case-list"><div class="case-row head"><span>Validation ID</span><span>Malignant probability</span><span>Actual class</span><span>Prediction</span></div></div>
     </div>
   </section>
 
@@ -129,8 +152,8 @@
         <div class="quiz-q"><p>3. Why does ROC-AUC stay the same as the slider moves?</p><button class="btn" data-answer="right" data-q="q3">It evaluates ranking across thresholds, not one selected cut-off</button><button class="btn" data-answer="wrong" data-q="q3">It is the same as accuracy</button><button class="btn" data-answer="wrong" data-q="q3">The model is retrained at each setting</button><div class="quiz-feedback" id="q3"></div></div>
       </div>
       <div class="tab-content" id="procedure">
-        <ol style="padding-left:21px;color:#c2d2e6;font-size:13px;line-height:1.9"><li>Load the Breast Cancer Wisconsin dataset and separate predictors from the malignant/benign target.</li><li>Split into training and held-out test subsets using stratification and a fixed random seed.</li><li>Standardize features and train Logistic Regression on the training set only.</li><li>Generate malignant-class probabilities once on the test set.</li><li>Change the threshold to produce new predicted labels without retraining the model.</li><li>Compare the confusion matrix, accuracy, precision, recall, F1-score and specificity. Note ROC-AUC remains fixed.</li><li>Explain which threshold might suit a scenario where false negatives are especially costly, while noting the trade-off.</li></ol>
-        <p style="color:var(--muted);font-size:12px;margin-bottom:0">Reproducibility: scikit-learn built-in dataset · random_state = 42 · stratified 75/25 split · standard scaling + Logistic Regression.</p>
+        <ol style="padding-left:21px;color:#c2d2e6;font-size:13px;line-height:1.9"><li>Load the Breast Cancer Wisconsin dataset and separate predictors from the malignant/benign target.</li><li>Create stratified training, validation and test subsets using a fixed random seed.</li><li>Standardize features and train Logistic Regression on the training set only.</li><li>Generate malignant-class probabilities for validation and test subsets.</li><li>Change the threshold to produce new validation predictions without retraining the model.</li><li>Compare validation confusion-matrix counts, accuracy, precision, recall, F1-score and specificity. ROC-AUC remains fixed as the threshold changes.</li><li>Explain which threshold might suit a scenario where false negatives are especially costly, while noting the trade-off.</li></ol>
+        <p style="color:var(--muted);font-size:12px;margin-bottom:0">Reproducibility: scikit-learn built-in dataset · random_state = 42 · stratified 60/20/20 train/validation/test split · standard scaling + Logistic Regression.</p>
       </div>
     </div>
   </section>
@@ -151,12 +174,14 @@
   const $ = id => document.getElementById(id);
   let data = null;
   let filter = "all";
+  let lockedThreshold = null;
+  let testEvaluation = null;
   const defaultThreshold = 0.50;
   const fmt = x => Number.isFinite(x) ? (x*100).toFixed(1)+"%" : "—";
   const ratio = (a,b) => b ? a/b : 0;
-  function calc(threshold){
+  function calc(threshold, cases=data.cases){
     let tp=0,tn=0,fp=0,fn=0;
-    for(const c of data.cases){
+    for(const c of cases){
       const pred = c.malignantProbability >= threshold ? 1 : 0;
       if(c.actual===1 && pred===1) tp++;
       else if(c.actual===0 && pred===0) tn++;
@@ -171,7 +196,7 @@
   function renderMetrics(m){
     setText("threshold-output",m.threshold.toFixed(2));
     setText("accuracy",fmt(m.accuracy));setText("precision",fmt(m.precision));setText("recall",fmt(m.recall));
-    setText("f1",fmt(m.f1));setText("specificity",fmt(m.specificity));setText("auc",data.model.rocAuc.toFixed(3));
+    setText("f1",fmt(m.f1));setText("specificity",fmt(m.specificity));setText("auc",data.model.validationRocAuc.toFixed(3));
     setText("tp",m.tp);setText("tn",m.tn);setText("fp",m.fp);setText("fn",m.fn);
     const malignant=m.tp+m.fn, benign=m.tn+m.fp;
     setText("detected-count",m.tp+" / "+malignant);
@@ -199,7 +224,7 @@
       return {...c,pred,correct:pred===c.actual};
     }).filter(c=> filter==="wrong"?!c.correct:filter==="positive"?c.pred===1:true)
       .sort((a,b)=>(a.correct-b.correct)||(b.malignantProbability-a.malignantProbability));
-    const head='<div class="case-row head"><span>Test ID</span><span>Malignant probability</span><span>Actual class</span><span>Prediction</span></div>';
+    const head='<div class="case-row head"><span>Validation ID</span><span>Malignant probability</span><span>Actual class</span><span>Prediction</span></div>';
     const rows=arr.map(c=>{
       const prob=fmt(c.malignantProbability), actual=c.actual===1?"Malignant":"Benign", pred=c.pred===1?"Malignant":"Benign";
       const status=c.correct?'<span class="status good">Correct</span>':'<span class="status bad">Incorrect</span>';
@@ -208,12 +233,41 @@
     $("case-list").innerHTML=head+(rows||'<div style="padding:18px;color:var(--muted)">No cases match this filter at the current threshold.</div>');
     setText("case-count",arr.length+" case(s)");
   }
+  function renderTestEvaluation(m){
+    setText("test-accuracy",fmt(m.accuracy));setText("test-precision",fmt(m.precision));
+    setText("test-recall",fmt(m.recall));setText("test-f1",fmt(m.f1));
+    setText("test-specificity",fmt(m.specificity));setText("test-auc",data.model.testRocAuc.toFixed(3));
+    setText("test-tp",m.tp);setText("test-tn",m.tn);setText("test-fp",m.fp);setText("test-fn",m.fn);
+    setText("test-summary-caption","Threshold "+m.threshold.toFixed(2)+" was frozen using validation results before evaluation on "+m.total+" separate test samples.");
+  }
   function update(){
     if(!data)return;
     const threshold=Number($("threshold-slider").value);
     const m=calc(threshold);
     document.querySelectorAll(".preset").forEach(b=>b.classList.toggle("active",Math.abs(Number(b.dataset.threshold)-threshold)<0.001));
     renderMetrics(m);renderCompare(m);renderCases(m);
+  }
+  function freezeAndEvaluate(){
+    if(!data)return;
+    if(lockedThreshold!==null){
+      lockedThreshold=null;testEvaluation=null;
+      $("threshold-slider").disabled=false;
+      document.querySelectorAll(".preset").forEach(b=>b.disabled=false);
+      $("test-eval-btn").textContent="Freeze threshold & evaluate final test set";
+      $("test-panel").style.display="none";
+      setText("status-text","Trained model ready");
+      update();
+      return;
+    }
+    lockedThreshold=Number($("threshold-slider").value);
+    testEvaluation=calc(lockedThreshold,data.testCases);
+    $("threshold-slider").disabled=true;
+    document.querySelectorAll(".preset").forEach(b=>b.disabled=true);
+    $("test-eval-btn").textContent="↻ Restart threshold experiment";
+    renderTestEvaluation(testEvaluation);
+    $("test-panel").style.display="block";
+    setText("status-text","Final test evaluated");
+    $("test-panel").scrollIntoView({behavior:"smooth",block:"start"});
   }
   function exportCSV(){
     if(!data)return;
@@ -223,14 +277,20 @@
       ["Dataset",data.dataset.name],
       ["Model",data.model.name],
       ["Positive class","Malignant"],
-      ["Threshold",threshold.toFixed(2)],
-      ["Test samples",m.total],
+      ["Threshold selected on validation",threshold.toFixed(2)],
+      ["Validation samples",m.total],
       ["TP",m.tp],["TN",m.tn],["FP",m.fp],["FN",m.fn],
       ["Accuracy",m.accuracy],["Precision",m.precision],["Recall / Sensitivity",m.recall],
-      ["F1-score",m.f1],["Specificity",m.specificity],["ROC-AUC",data.model.rocAuc],
-      [],
-      ["Test ID","Actual class","Predicted class","Malignant probability","Correct"]
+      ["F1-score",m.f1],["Specificity",m.specificity],["Validation ROC-AUC",data.model.validationRocAuc],
     ];
+    if(testEvaluation){
+      rows.push([],["FINAL HELD-OUT TEST — selected threshold",lockedThreshold.toFixed(2)],
+        ["Test samples",testEvaluation.total],["Test TP",testEvaluation.tp],["Test TN",testEvaluation.tn],
+        ["Test FP",testEvaluation.fp],["Test FN",testEvaluation.fn],["Test accuracy",testEvaluation.accuracy],
+        ["Test precision",testEvaluation.precision],["Test recall",testEvaluation.recall],["Test F1-score",testEvaluation.f1],
+        ["Test specificity",testEvaluation.specificity],["Test ROC-AUC",data.model.testRocAuc]);
+    }
+    rows.push([],["Validation ID","Actual class","Predicted class","Malignant probability","Correct"]);
     data.cases.forEach(c=>{
       const pred=c.malignantProbability>=threshold?1:0;
       rows.push([c.id,c.actual===1?"Malignant":"Benign",pred===1?"Malignant":"Benign",c.malignantProbability.toFixed(6),pred===c.actual?"Yes":"No"]);
@@ -243,8 +303,18 @@
   }
   $("export-btn").addEventListener("click",exportCSV);
   $("threshold-slider").addEventListener("input",update);
-  document.querySelectorAll(".preset").forEach(b=>b.addEventListener("click",()=>{$("threshold-slider").value=b.dataset.threshold;update()}));
-  $("reset-btn").addEventListener("click",()=>{$("threshold-slider").value=defaultThreshold;filter="all";document.querySelectorAll("[data-filter]").forEach(b=>b.classList.toggle("active",b.dataset.filter==="all"));update()});
+  document.querySelectorAll(".preset").forEach(b=>b.addEventListener("click",()=>{if(lockedThreshold!==null)return;$("threshold-slider").value=b.dataset.threshold;update()}));
+  $("test-eval-btn").addEventListener("click",freezeAndEvaluate);
+  $("reset-btn").addEventListener("click",()=>{
+    $("threshold-slider").value=defaultThreshold;filter="all";lockedThreshold=null;testEvaluation=null;
+    $("threshold-slider").disabled=false;
+    document.querySelectorAll(".preset").forEach(b=>{b.disabled=false;b.classList.toggle("active",Number(b.dataset.threshold)===defaultThreshold)});
+    $("test-eval-btn").textContent="Freeze threshold & evaluate final test set";
+    $("test-panel").style.display="none";
+    setText("status-text","Trained model ready");
+    document.querySelectorAll("[data-filter]").forEach(b=>b.classList.toggle("active",b.dataset.filter==="all"));
+    update();
+  });
   document.querySelectorAll("[data-filter]").forEach(b=>b.addEventListener("click",()=>{filter=b.dataset.filter;document.querySelectorAll("[data-filter]").forEach(x=>x.classList.toggle("active",x===b));update()}));
   document.querySelectorAll("[data-tab]").forEach(b=>b.addEventListener("click",()=>{document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("active",x===b));document.querySelectorAll(".tab-content").forEach(x=>x.classList.toggle("active",x.id===b.dataset.tab))}));
   document.querySelectorAll("[data-q]").forEach(b=>b.addEventListener("click",()=>{const q=b.dataset.q;const siblings=document.querySelectorAll('[data-q="'+q+'"]');siblings.forEach(x=>x.classList.remove("active"));b.classList.add("active");const isRight=b.dataset.answer==="right";setText(q,isRight?"Correct. "+({q1:"Lowering the cut-off predicts more positive cases; recall often increases, but false positives may increase too.",q2:"Recall = TP / (TP + FN), the fraction of actual positives detected.",q3:"ROC-AUC measures score ranking across all possible cut-offs, so changing one cut-off does not change it."}[q]):"Not quite. Review the definition above and try again.");$(q).style.color=isRight?"var(--green)":"var(--amber)";}));
@@ -254,8 +324,8 @@
     setText("dataset-name",d.dataset.name);
     setText("sample-count",d.dataset.samples);
     setText("train-count",d.dataset.trainSamples);
+    setText("validation-count",d.dataset.validationSamples);
     setText("test-count",d.dataset.testSamples);
-    setText("auc-hero",d.model.rocAuc.toFixed(3));
     $("error-box").style.display="none";
     update();
   }).catch(err=>{$("error-box").style.display="block";setText("status-text","Model unavailable");console.error(err)});
