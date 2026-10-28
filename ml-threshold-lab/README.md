@@ -1,20 +1,32 @@
 # Classification Threshold Tuning — ML Virtual Lab
 
-A hands-on Machine Learning virtual lab for the VESIT Computer Engineering curriculum.
+A focused, interactive Machine Learning virtual lab aligned to the VESIT Computer Engineering ML syllabus.
 
-## Focus concept
+## Exact concept
 
-**Classification threshold tuning in Logistic Regression.** Students adjust the probability cut-off and observe its effect on the confusion matrix, accuracy, precision, recall (sensitivity), F1-score, specificity and ROC-AUC.
+**Classification threshold tuning in Logistic Regression.** Students move a probability cut-off and inspect how it changes predicted class labels, confusion-matrix counts, accuracy, precision, recall (sensitivity), F1-score and specificity. ROC-AUC remains fixed for a trained model because its probability rankings do not change when only the decision threshold moves.
 
-## What the lab demonstrates
+## Dataset and methodology
 
-- Trains Logistic Regression on the scikit-learn Breast Cancer Wisconsin (Diagnostic) benchmark dataset.
-- Uses a stratified 75/25 train/test split with `random_state=42` (426 training and 143 test samples).
-- Fits `StandardScaler` only on the training set through a scikit-learn pipeline.
-- Generates held-out test probabilities once; changing the threshold changes predicted class labels without retraining.
-- Treats **malignant as the positive class**, so recall is the fraction of malignant cases detected.
-- Includes a live confusion matrix, metric cards, threshold presets, a threshold comparison table, individual test-case explorer and viva questions.
-- ROC-AUC remains constant as the threshold is changed because it measures ranking quality across all cut-offs, rather than a single cut-off.
+- Dataset: scikit-learn's Breast Cancer Wisconsin (Diagnostic) benchmark dataset (569 samples, 30 numeric features).
+- Positive class: **malignant** (explicitly remapped to target value 1 for this experiment).
+- Split: stratified 60% train / 20% validation / 20% final test, `random_state=42` (341 training, 114 validation, 114 test examples).
+- Model: `StandardScaler` + `LogisticRegression(max_iter=3000, random_state=42)`.
+- Data leakage prevention: scaler and classifier are fitted only on the training subset.
+- Threshold exploration: the slider, comparison table, and case explorer use validation predictions.
+- Final evaluation: freeze the selected threshold to evaluate it once on the separate test subset; the slider/presets are locked until the experiment is restarted.
+- Metrics and probabilities are computed from the actual fitted model and dataset, not hard-coded examples.
+
+## Features
+
+- Live validation metrics and confusion matrix.
+- Preset thresholds (0.25, 0.50, 0.75) plus a continuous threshold slider.
+- Comparison table showing accuracy, precision, recall, F1, false negatives and false positives.
+- Validation-case explorer with filters for mistakes and predicted-positive cases.
+- A deliberate final-test step that freezes the threshold and reveals test metrics and the test confusion matrix.
+- CSV export for the selected validation run, plus final test results if the learner evaluated the held-out test.
+- Experiment brief, step-by-step procedure, definitions, viva questions, inference and conclusion prompts.
+- Health endpoint for deployment checks.
 
 ## Run locally
 
@@ -31,33 +43,40 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Open http://localhost:8000
+Open http://localhost:8000.
 
-## Method
+Run regression tests from the `ml-threshold-lab` directory:
 
-1. Load the dataset from `sklearn.datasets.load_breast_cancer`.
-2. Convert the target so malignant is 1 (positive) and benign is 0 (negative).
-3. Stratify a 75/25 train/test split using random seed 42.
-4. Fit feature scaling and Logistic Regression on the training data.
-5. Score held-out test rows to obtain malignant probabilities.
-6. Predict malignant when probability >= selected threshold.
-7. Recalculate confusion-matrix counts and metrics on the same test set for each threshold.
+```bash
+python -m unittest discover -s tests -v
+```
 
-Metrics:
+## Experiment procedure
+
+1. Load the benchmark data and map malignant to the positive class.
+2. Split data into stratified training, validation and test subsets.
+3. Fit feature scaling and Logistic Regression on training data only.
+4. Generate probabilities for the validation and test examples.
+5. Use validation data to explore the precision/recall trade-off by moving the threshold.
+6. Record the selected threshold and its validation metrics.
+7. Freeze the threshold and reveal final test metrics, without using those test results to retune the threshold.
+
+## Metric formulas
+
 - Accuracy = (TP + TN) / (TP + TN + FP + FN)
 - Precision = TP / (TP + FP)
 - Recall = TP / (TP + FN)
 - F1 = 2 × Precision × Recall / (Precision + Recall)
 - Specificity = TN / (TN + FP)
 
-When a denominator is zero, the lab displays the corresponding ratio as 0.
+If a metric's denominator is zero, the lab returns 0 for that ratio.
 
 ## Endpoints
 
-- `/` — interactive web lab
-- `/api/data` — benchmark metadata and held-out predictions
-- `/api/health` — lightweight health response
+- `/` — interactive virtual lab
+- `/api/data` — trained-model metadata and held-out probabilities
+- `/api/health` — lightweight model/split health status
 
-## Important limitation
+## Safety and interpretation
 
-This is an educational demonstration of classification metrics, not a clinical decision tool. It must not be used for real patient diagnosis or treatment decisions. Model performance on this split does not guarantee performance on new data.
+This is an educational classification experiment, not a clinical decision tool. It must not be used for diagnosis or treatment. The model's scores depend on a benchmark dataset and a single deterministic split; they do not guarantee performance on future data. Threshold selection should reflect error costs and be conducted on validation data, with final evaluation performed on untouched test data.
