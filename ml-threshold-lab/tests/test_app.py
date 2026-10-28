@@ -7,7 +7,8 @@ import threading
 import unittest
 from http.server import ThreadingHTTPServer
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 
 LAB_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(LAB_DIR))
@@ -16,7 +17,7 @@ import app  # noqa: E402
 
 
 def evaluate(cases: list[dict], threshold: float) -> dict[str, float | int]:
-    """Calculate binary classification counts/metrics as the browser does."""
+    """Reconcile confusion-matrix counts and metrics for validation examples."""
     tp = tn = fp = fn = 0
     for case in cases:
         predicted = int(case["malignantProbability"] >= threshold)
@@ -60,25 +61,21 @@ class ModelInvariantTests(unittest.TestCase):
         meta = app.LAB_DATA["dataset"]
         self.assertEqual(meta["validationMalignant"] + meta["validationBenign"], meta["validationSamples"])
         self.assertEqual(meta["testMalignant"] + meta["testBenign"], meta["testSamples"])
-        self.assertGreater(meta["validationMalignant"], 0)
-        self.assertGreater(meta["validationBenign"], 0)
-        self.assertGreater(meta["testMalignant"], 0)
-        self.assertGreater(meta["testBenign"], 0)
+        for key in ("validationMalignant", "validationBenign", "testMalignant", "testBenign"):
+            self.assertGreater(meta[key], 0)
 
-    def test_probabilities_and_auc_are_valid(self) -> None:
-        for split in ("cases", "testCases"):
-            cases = app.LAB_DATA[split]
-            self.assertTrue(cases)
-            self.assertEqual(len(cases), 114)
-            for case in cases:
-                self.assertIn(case["actual"], (0, 1))
-                self.assertGreaterEqual(case["malignantProbability"], 0.0)
-                self.assertLessEqual(case["malignantProbability"], 1.0)
-        model = app.LAB_DATA["model"]
-        self.assertGreaterEqual(model["validationRocAuc"], 0.0)
-        self.assertLessEqual(model["validationRocAuc"], 1.0)
-        self.assertGreaterEqual(model["testRocAuc"], 0.0)
-        self.assertLessEqual(model["testRocAuc"], 1.0)
+    def test_validation_probabilities_and_auc_are_valid(self) -> None:
+        cases = app.LAB_DATA["cases"]
+        self.assertEqual(len(cases), 114)
+        for case in cases:
+            self.assertIn(case["actual"], (0, 1))
+            self.assertGreaterEqual(case["malignantProbability"], 0.0)
+            self.assertLessEqual(case["malignantProbability"], 1.0)
+        self.assertTrue(all(0.0 <= score <= 1.0 for score in app.test_scores))
+        self.assertGreaterEqual(app.LAB_DATA["model"]["validationRocAuc"], 0.0)
+        self.assertLessEqual(app.LAB_DATA["model"]["validationRocAuc"], 1.0)
+        self.assertGreaterEqual(app.test_auc, 0.0)
+        self.assertLessEqual(app.test_auc, 1.0)
 
     def test_threshold_counts_reconcile_and_positive_predictions_are_monotonic(self) -> None:
         cases = app.LAB_DATA["cases"]
@@ -93,12 +90,12 @@ class ModelInvariantTests(unittest.TestCase):
         self.assertGreaterEqual(low["tp"] + low["fp"], middle["tp"] + middle["fp"])
         self.assertGreaterEqual(middle["tp"] + middle["fp"], high["tp"] + high["fp"])
 
-    def test_validation_and_test_examples_are_separate(self) -> None:
+    def test_final_test_predictions_are_not_in_browser_payload(self) -> None:
+        self.assertIn("cases", app.LAB_DATA)
+        self.assertNotIn("testCases", app.LAB_DATA)
+        self.assertNotIn("testRocAuc", app.LAB_DATA["model"])
         val_ids = {row["id"] for row in app.LAB_DATA["cases"]}
-        test_ids = {row["id"] for row in app.LAB_DATA["testCases"]}
-        self.assertFalse(val_ids & test_ids)
         self.assertTrue(all(key.startswith("VAL-") for key in val_ids))
-        self.assertTrue(all(key.startswith("TEST-") for key in test_ids))
 
 
 class HTTPEndpointTests(unittest.TestCase):
@@ -125,14 +122,42 @@ class HTTPEndpointTests(unittest.TestCase):
         self.assertEqual(payload["validationSamples"], 114)
         self.assertEqual(payload["testSamples"], 114)
 
-    def test_data_endpoint_separates_validation_from_test(self) -> None:
+    def test_data_endpoint_only_exposes_validation_rows(self) -> None:
         with urlopen(self.base_url + "/api/data", timeout=3) as response:
             payload = json.loads(response.read().decode("utf-8"))
             self.assertEqual(response.status, 200)
         self.assertEqual(len(payload["cases"]), 114)
-        self.assertEqual(len(payload["testCases"]), 114)
+        self.assertNotIn("testCases", payload)
         self.assertIn("validationRocAuc", payload["model"])
-        self.assertIn("testRocAuc", payload["model"])
+        self.assertNotIn("testRocAuc", payload["model"])
+
+    def test_final_test_endpoint_returns_aggregate_metrics_only(self) -> None:
+        request = Request(
+            self.base_url + "/api/evaluate-test",
+            data=json.dumps({"threshold": 0.50}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(request, timeout=3) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            self.assertEqual(response.status, 200)
+        self.assertEqual(payload["total"], 114)
+        self.assertEqual(payload["tp"] + payload["fn"], app.LAB_DATA["dataset"]["testMalignant"])
+        self.assertEqual(payload["tn"] + payload["fp"], app.LAB_DATA["dataset"]["testBenign"])
+        self.assertIn("rocAuc", payload)
+        self.assertNotIn("cases", payload)
+        self.assertNotIn("probabilities", payload)
+
+    def test_invalid_threshold_is_rejected(self) -> None:
+        request = Request(
+            self.base_url + "/api/evaluate-test",
+            data=json.dumps({"threshold": 2.0}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with self.assertRaises(HTTPError) as context:
+            urlopen(request, timeout=3)
+        self.assertEqual(context.exception.code, 400)
 
     def test_root_serves_the_interactive_lab(self) -> None:
         with urlopen(self.base_url + "/", timeout=3) as response:
@@ -144,9 +169,9 @@ class HTTPEndpointTests(unittest.TestCase):
         self.assertIn("export-btn", html)
 
     def test_unknown_routes_return_404(self) -> None:
-        with self.assertRaises(Exception) as context:
+        with self.assertRaises(HTTPError) as context:
             urlopen(self.base_url + "/not-a-real-route", timeout=3)
-        self.assertEqual(getattr(context.exception, "code", None), 404)
+        self.assertEqual(context.exception.code, 404)
 
 
 if __name__ == "__main__":
