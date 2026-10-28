@@ -74,7 +74,8 @@ If a metric's denominator is zero, the lab returns 0 for that ratio.
 ## Endpoints
 
 - `/` — interactive virtual lab
-- `/api/data` — trained-model metadata and held-out probabilities
+- `/api/data` — model metadata, split sizes and validation probabilities/labels
+- `/api/evaluate-test` — POST a JSON body such as `{"threshold": 0.5}`; returns aggregate metrics for the final test set without exposing individual test cases
 - `/api/health` — lightweight model/split health status
 
 ## Safety and interpretation
