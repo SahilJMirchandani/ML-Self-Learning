@@ -117,8 +117,6 @@ LAB_DATA = {
         "testSamples": int(X_test.shape[0]),
         "validationMalignant": int(y_validation.sum()),
         "validationBenign": int(len(y_validation) - y_validation.sum()),
-        "testMalignant": int(y_test.sum()),
-        "testBenign": int(len(y_test) - y_test.sum()),
         "split": "60% train / 20% validation / 20% test",
         "randomState": RANDOM_STATE,
         "source": "scikit-learn built-in benchmark dataset",
