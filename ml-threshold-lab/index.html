@@ -236,7 +236,7 @@
   function renderTestEvaluation(m){
     setText("test-accuracy",fmt(m.accuracy));setText("test-precision",fmt(m.precision));
     setText("test-recall",fmt(m.recall));setText("test-f1",fmt(m.f1));
-    setText("test-specificity",fmt(m.specificity));setText("test-auc",data.model.testRocAuc.toFixed(3));
+    setText("test-specificity",fmt(m.specificity));setText("test-auc",m.rocAuc.toFixed(3));
     setText("test-tp",m.tp);setText("test-tn",m.tn);setText("test-fp",m.fp);setText("test-fn",m.fn);
     setText("test-summary-caption","Threshold "+m.threshold.toFixed(2)+" was frozen using validation results before evaluation on "+m.total+" separate test samples.");
   }
@@ -247,7 +247,7 @@
     document.querySelectorAll(".preset").forEach(b=>b.classList.toggle("active",Math.abs(Number(b.dataset.threshold)-threshold)<0.001));
     renderMetrics(m);renderCompare(m);renderCases(m);
   }
-  function freezeAndEvaluate(){
+  async function freezeAndEvaluate(){
     if(!data)return;
     if(lockedThreshold!==null){
       lockedThreshold=null;testEvaluation=null;
@@ -260,14 +260,35 @@
       return;
     }
     lockedThreshold=Number($("threshold-slider").value);
-    testEvaluation=calc(lockedThreshold,data.testCases);
     $("threshold-slider").disabled=true;
     document.querySelectorAll(".preset").forEach(b=>b.disabled=true);
-    $("test-eval-btn").textContent="↻ Restart threshold experiment";
-    renderTestEvaluation(testEvaluation);
-    $("test-panel").style.display="block";
-    setText("status-text","Final test evaluated");
-    $("test-panel").scrollIntoView({behavior:"smooth",block:"start"});
+    $("test-eval-btn").disabled=true;
+    $("test-eval-btn").textContent="Evaluating final test…";
+    try{
+      const response=await fetch("/api/evaluate-test",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({threshold:lockedThreshold})
+      });
+      if(!response.ok)throw new Error("Final test evaluation request failed ("+response.status+").");
+      testEvaluation=await response.json();
+      renderTestEvaluation(testEvaluation);
+      $("test-panel").style.display="block";
+      $("test-eval-btn").textContent="↻ Restart threshold experiment";
+      setText("status-text","Final test evaluated");
+      $("test-panel").scrollIntoView({behavior:"smooth",block:"start"});
+    }catch(error){
+      lockedThreshold=null;
+      $("threshold-slider").disabled=false;
+      document.querySelectorAll(".preset").forEach(b=>b.disabled=false);
+      $("test-eval-btn").textContent="Freeze threshold & evaluate final test set";
+      setText("status-text","Final evaluation unavailable");
+      $("error-box").textContent="Could not evaluate the final test set. Check the service and try again.";
+      $("error-box").style.display="block";
+      console.error(error);
+    }finally{
+      $("test-eval-btn").disabled=false;
+    }
   }
   function exportCSV(){
     if(!data)return;
@@ -288,7 +309,7 @@
         ["Test samples",testEvaluation.total],["Test TP",testEvaluation.tp],["Test TN",testEvaluation.tn],
         ["Test FP",testEvaluation.fp],["Test FN",testEvaluation.fn],["Test accuracy",testEvaluation.accuracy],
         ["Test precision",testEvaluation.precision],["Test recall",testEvaluation.recall],["Test F1-score",testEvaluation.f1],
-        ["Test specificity",testEvaluation.specificity],["Test ROC-AUC",data.model.testRocAuc]);
+        ["Test specificity",testEvaluation.specificity],["Test ROC-AUC",testEvaluation.rocAuc]);
     }
     rows.push([],["Validation ID","Actual class","Predicted class","Malignant probability","Correct"]);
     data.cases.forEach(c=>{
