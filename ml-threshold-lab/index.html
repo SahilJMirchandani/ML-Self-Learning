@@ -33,6 +33,15 @@
     </aside>
   </section>
 
+  <section>
+    <div class="section-head"><div><div class="eyebrow">Experiment brief</div><h2>Understand the concept before running it</h2><p>A focused experiment aligned with supervised learning and classification evaluation.</p></div></div>
+    <div class="notes">
+      <div class="note"><div class="symbol">🎯</div><b>Aim</b><p>Study how a Logistic Regression classification threshold changes predictions and the trade-off between precision and recall.</p></div>
+      <div class="note"><div class="symbol">🧪</div><b>Objectives</b><p>Interpret the confusion matrix; calculate classification metrics; compare thresholds on the same held-out test set; explain false positives and false negatives.</p></div>
+      <div class="note"><div class="symbol">🛠️</div><b>Tools &amp; method</b><p>Python, scikit-learn, Logistic Regression, StandardScaler and the built-in Breast Cancer Wisconsin benchmark dataset. A stratified 75/25 split is used.</p></div>
+    </div>
+  </section>
+
   <div class="error" id="error-box">The trained model data could not be loaded. Refresh the page or check the server logs.</div>
   <section>
     <div class="section-head"><div><div class="eyebrow">01 / Experiment controls</div><h2>Change the decision threshold</h2><p>All metrics below update using the same held-out test set.</p></div><button class="btn ghost" id="reset-btn">↺ Reset experiment</button></div>
@@ -56,7 +65,7 @@
           <div class="metric"><div class="label">Recall / Sensitivity</div><div class="value" id="recall">—</div><div class="desc">Malignant cases caught</div></div>
           <div class="metric"><div class="label">F1-score</div><div class="value" id="f1">—</div><div class="desc">Precision–recall balance</div></div>
           <div class="metric"><div class="label">Specificity</div><div class="value" id="specificity">—</div><div class="desc">Benign cases correctly cleared</div></div>
-          <div class="metric"><div class="label">ROC-AUC</div><div class="value" id="auc">—</div><div class="desc">Threshold-independent ranking</div></div>
+          <div class="metric"><div class="label">ROC-AUC</div><div class="value" id="auc">—</div><div class="desc">Ranking quality (0–1 scale)</div></div>
         </div>
         <div class="section-head" style="margin:20px 0 12px"><div><h2 style="font-size:16px">Confusion matrix</h2><p>Positive class = malignant</p></div></div>
         <div class="cm-layout">
@@ -86,7 +95,7 @@
   </section>
 
   <section>
-    <div class="section-head"><div><div class="eyebrow">03 / Compare runs</div><h2>Compare common thresholds</h2><p>Same trained model and test data; only the decision threshold changes.</p></div></div>
+    <div class="section-head"><div><div class="eyebrow">03 / Compare runs</div><h2>Compare common thresholds</h2><p>Same trained model and test data; only the decision threshold changes.</p></div><button class="btn ghost" id="export-btn">↓ Export current results CSV</button></div>
     <div class="panel" style="overflow-x:auto">
       <table class="comparison"><thead><tr><th>Threshold</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1-score</th><th>FN</th><th>FP</th></tr></thead><tbody id="compare-body"></tbody></table>
     </div>
@@ -126,6 +135,15 @@
     </div>
   </section>
 
+  <section>
+    <div class="section-head"><div><div class="eyebrow">06 / Lab-record summary</div><h2>Inference and conclusion</h2><p>Use the live results above when writing the observation section of your lab record.</p></div></div>
+    <div class="notes">
+      <div class="note"><b>Inference</b><p>Changing the classification threshold changes the number of positive predictions, so precision, recall, specificity and the confusion-matrix counts can change even though the trained model stays the same. ROC-AUC stays constant because the underlying probability rankings remain unchanged.</p></div>
+      <div class="note"><b>Conclusion</b><p>The experiment demonstrates that 0.50 is not automatically the best threshold for every task. A suitable threshold depends on the relative cost of false negatives and false positives and should be selected using validation data, then assessed on held-out test data.</p></div>
+      <div class="note"><b>What to report</b><p>Record the selected threshold, TP, TN, FP, FN, accuracy, precision, recall, F1-score, specificity and ROC-AUC. Explain at least one trade-off you observed. Export the current run as CSV for further analysis.</p></div>
+    </div>
+  </section>
+
   <footer class="footer"><span>ML Classification Threshold Tuning · Virtual Lab</span><span>Educational demonstration only · Not for clinical use</span></footer>
 </div>
 <script>
@@ -153,7 +171,7 @@
   function renderMetrics(m){
     setText("threshold-output",m.threshold.toFixed(2));
     setText("accuracy",fmt(m.accuracy));setText("precision",fmt(m.precision));setText("recall",fmt(m.recall));
-    setText("f1",fmt(m.f1));setText("specificity",fmt(m.specificity));setText("auc",fmt(data.model.rocAuc));
+    setText("f1",fmt(m.f1));setText("specificity",fmt(m.specificity));setText("auc",data.model.rocAuc.toFixed(3));
     setText("tp",m.tp);setText("tn",m.tn);setText("fp",m.fp);setText("fn",m.fn);
     const malignant=m.tp+m.fn, benign=m.tn+m.fp;
     setText("detected-count",m.tp+" / "+malignant);
@@ -197,6 +215,33 @@
     document.querySelectorAll(".preset").forEach(b=>b.classList.toggle("active",Math.abs(Number(b.dataset.threshold)-threshold)<0.001));
     renderMetrics(m);renderCompare(m);renderCases(m);
   }
+  function exportCSV(){
+    if(!data)return;
+    const threshold=Number($("threshold-slider").value), m=calc(threshold);
+    const rows=[
+      ["ML Classification Threshold Tuning — Run Summary"],
+      ["Dataset",data.dataset.name],
+      ["Model",data.model.name],
+      ["Positive class","Malignant"],
+      ["Threshold",threshold.toFixed(2)],
+      ["Test samples",m.total],
+      ["TP",m.tp],["TN",m.tn],["FP",m.fp],["FN",m.fn],
+      ["Accuracy",m.accuracy],["Precision",m.precision],["Recall / Sensitivity",m.recall],
+      ["F1-score",m.f1],["Specificity",m.specificity],["ROC-AUC",data.model.rocAuc],
+      [],
+      ["Test ID","Actual class","Predicted class","Malignant probability","Correct"]
+    ];
+    data.cases.forEach(c=>{
+      const pred=c.malignantProbability>=threshold?1:0;
+      rows.push([c.id,c.actual===1?"Malignant":"Benign",pred===1?"Malignant":"Benign",c.malignantProbability.toFixed(6),pred===c.actual?"Yes":"No"]);
+    });
+    const csv=rows.map(row=>row.map(v=>{const s=String(v??"");return /[",\\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(",")).join("\\r\\n");
+    const blob=new Blob(["\\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob),a=document.createElement("a");
+    a.href=url;a.download="ml-threshold-results-"+threshold.toFixed(2)+".csv";
+    document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+  }
+  $("export-btn").addEventListener("click",exportCSV);
   $("threshold-slider").addEventListener("input",update);
   document.querySelectorAll(".preset").forEach(b=>b.addEventListener("click",()=>{$("threshold-slider").value=b.dataset.threshold;update()}));
   $("reset-btn").addEventListener("click",()=>{$("threshold-slider").value=defaultThreshold;filter="all";document.querySelectorAll("[data-filter]").forEach(b=>b.classList.toggle("active",b.dataset.filter==="all"));update()});
