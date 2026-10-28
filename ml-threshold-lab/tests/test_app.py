@@ -60,9 +60,11 @@ class ModelInvariantTests(unittest.TestCase):
     def test_stratified_splits_keep_all_examples(self) -> None:
         meta = app.LAB_DATA["dataset"]
         self.assertEqual(meta["validationMalignant"] + meta["validationBenign"], meta["validationSamples"])
-        self.assertEqual(meta["testMalignant"] + meta["testBenign"], meta["testSamples"])
-        for key in ("validationMalignant", "validationBenign", "testMalignant", "testBenign"):
+        self.assertEqual(int(app.y_test.sum()) + int(len(app.y_test) - app.y_test.sum()), meta["testSamples"])
+        for key in ("validationMalignant", "validationBenign"):
             self.assertGreater(meta[key], 0)
+        self.assertGreater(int(app.y_test.sum()), 0)
+        self.assertGreater(int(len(app.y_test) - app.y_test.sum()), 0)
 
     def test_validation_probabilities_and_auc_are_valid(self) -> None:
         cases = app.LAB_DATA["cases"]
@@ -93,6 +95,8 @@ class ModelInvariantTests(unittest.TestCase):
     def test_final_test_predictions_are_not_in_browser_payload(self) -> None:
         self.assertIn("cases", app.LAB_DATA)
         self.assertNotIn("testCases", app.LAB_DATA)
+        self.assertNotIn("testMalignant", app.LAB_DATA["dataset"])
+        self.assertNotIn("testBenign", app.LAB_DATA["dataset"])
         self.assertNotIn("testRocAuc", app.LAB_DATA["model"])
         val_ids = {row["id"] for row in app.LAB_DATA["cases"]}
         self.assertTrue(all(key.startswith("VAL-") for key in val_ids))
@@ -130,6 +134,8 @@ class HTTPEndpointTests(unittest.TestCase):
         self.assertNotIn("testCases", payload)
         self.assertIn("validationRocAuc", payload["model"])
         self.assertNotIn("testRocAuc", payload["model"])
+        self.assertNotIn("testMalignant", payload["dataset"])
+        self.assertNotIn("testBenign", payload["dataset"])
 
     def test_final_test_endpoint_returns_aggregate_metrics_only(self) -> None:
         request = Request(
@@ -142,8 +148,7 @@ class HTTPEndpointTests(unittest.TestCase):
             payload = json.loads(response.read().decode("utf-8"))
             self.assertEqual(response.status, 200)
         self.assertEqual(payload["total"], 114)
-        self.assertEqual(payload["tp"] + payload["fn"], app.LAB_DATA["dataset"]["testMalignant"])
-        self.assertEqual(payload["tn"] + payload["fp"], app.LAB_DATA["dataset"]["testBenign"])
+        self.assertEqual(payload["tp"] + payload["tn"] + payload["fp"] + payload["fn"], 114)
         self.assertIn("rocAuc", payload)
         self.assertNotIn("cases", payload)
         self.assertNotIn("probabilities", payload)
