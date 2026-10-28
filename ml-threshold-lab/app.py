@@ -1,8 +1,8 @@
 """VESIT ML Virtual Lab: Classification Threshold Tuning.
 
 Trains Logistic Regression on scikit-learn's Breast Cancer Wisconsin dataset.
-The browser explores thresholds on a validation set, then reveals a separate
-held-out test result for the selected threshold.
+Thresholds are explored on validation predictions. Final test evaluation runs
+server-side and returns metrics only, not individual test cases or probabilities.
 """
 from __future__ import annotations
 
@@ -24,14 +24,13 @@ ROOT = Path(__file__).resolve().parent
 PORT = int(os.environ.get("PORT", "8000"))
 RANDOM_STATE = 42
 
-# In scikit-learn's source dataset, target 0 = malignant and target 1 = benign.
-# Here malignant is explicitly re-mapped to positive class 1.
+# scikit-learn's source dataset uses target 0 = malignant and target 1 = benign.
+# Re-map malignant to positive class 1 for the threshold-tuning experiment.
 dataset = load_breast_cancer()
 X = dataset.data
 y_malignant = (dataset.target == 0).astype(int)
 
-# 60% train, 20% validation, 20% final test. Stratification preserves
-# the malignant/benign proportions in each split.
+# Stratified 60/20/20 train/validation/final-test split.
 X_train, X_remaining, y_train, y_remaining = train_test_split(
     X,
     y_malignant,
@@ -47,8 +46,7 @@ X_validation, X_test, y_validation, y_test = train_test_split(
     stratify=y_remaining,
 )
 
-# The scaler learns parameters from training data only; validation and test
-# data are transformed with those learned values through the pipeline.
+# The scaler and classifier are fitted only on training rows.
 model = make_pipeline(
     StandardScaler(),
     LogisticRegression(max_iter=3000, random_state=RANDOM_STATE),
@@ -62,7 +60,7 @@ test_auc = float(roc_auc_score(y_test, test_scores))
 
 
 def cases_for(y_true: np.ndarray, scores: np.ndarray, prefix: str) -> list[dict]:
-    """Return probabilities and ground truth for the teaching interface."""
+    """Return validation probabilities and ground truth for the browser lab."""
     return [
         {
             "id": f"{prefix}-{i + 1:03d}",
@@ -73,10 +71,42 @@ def cases_for(y_true: np.ndarray, scores: np.ndarray, prefix: str) -> list[dict]
     ]
 
 
-# All probability values come from the trained model. The browser computes
-# threshold-dependent confusion counts and metrics from validation cases.
-# Test predictions are provided separately and revealed only after the learner
-# freezes a chosen validation threshold in the interface.
+def evaluate_threshold(y_true: np.ndarray, scores: np.ndarray, threshold: float, auc: float) -> dict:
+    """Compute only aggregate metrics for a selected threshold."""
+    predicted = scores >= threshold
+    actual_positive = y_true == 1
+    actual_negative = y_true == 0
+    tp = int(np.sum(actual_positive & predicted))
+    fn = int(np.sum(actual_positive & ~predicted))
+    fp = int(np.sum(actual_negative & predicted))
+    tn = int(np.sum(actual_negative & ~predicted))
+    total = tp + tn + fp + fn
+
+    def ratio(numerator: int, denominator: int) -> float:
+        return numerator / denominator if denominator else 0.0
+
+    precision = ratio(tp, tp + fp)
+    recall = ratio(tp, tp + fn)
+    specificity = ratio(tn, tn + fp)
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    return {
+        "threshold": threshold,
+        "total": total,
+        "tp": tp,
+        "tn": tn,
+        "fp": fp,
+        "fn": fn,
+        "accuracy": ratio(tp + tn, total),
+        "precision": precision,
+        "recall": recall,
+        "specificity": specificity,
+        "f1": f1,
+        "rocAuc": auc,
+    }
+
+
+# The browser receives validation cases for threshold exploration only.
+# Test scores and labels are not included in this payload.
 LAB_DATA = {
     "dataset": {
         "name": "Breast Cancer Wisconsin (Diagnostic)",
@@ -99,10 +129,8 @@ LAB_DATA = {
         "positiveClass": "Malignant",
         "thresholdDefault": 0.50,
         "validationRocAuc": validation_auc,
-        "testRocAuc": test_auc,
     },
     "cases": cases_for(y_validation, validation_scores, "VAL"),
-    "testCases": cases_for(y_test, test_scores, "TEST"),
 }
 
 
@@ -145,8 +173,33 @@ class LabHandler(BaseHTTPRequestHandler):
             return
         self._send(404, b'{"error":"Not found"}', "application/json; charset=utf-8")
 
+    def do_POST(self) -> None:
+        path = urlparse(self.path).path
+        if path != "/api/evaluate-test":
+            self._send(404, b'{"error":"Not found"}', "application/json; charset=utf-8")
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if length <= 0 or length > 4096:
+                raise ValueError("Invalid request size")
+            request_body = json.loads(self.rfile.read(length).decode("utf-8"))
+            raw_threshold = request_body.get("threshold") if isinstance(request_body, dict) else None
+            if isinstance(raw_threshold, bool):
+                raise ValueError("Threshold must be numeric")
+            threshold = float(raw_threshold)
+            if not np.isfinite(threshold) or not 0.05 <= threshold <= 0.95:
+                raise ValueError("Threshold must be between 0.05 and 0.95")
+        except (ValueError, TypeError, json.JSONDecodeError):
+            self._send(400, b'{"error":"Provide a numeric threshold between 0.05 and 0.95"}', "application/json; charset=utf-8")
+            return
+
+        # Only aggregate metrics cross the API boundary for the final test set.
+        result = evaluate_threshold(y_test, test_scores, threshold, test_auc)
+        body = json.dumps(result, separators=(",", ":")).encode("utf-8")
+        self._send(200, body, "application/json; charset=utf-8")
+
     def log_message(self, fmt: str, *args) -> None:
-        # Avoid logging individual prediction values or personal data.
+        # Do not log request bodies, probabilities, or individual classifications.
         print(f"[ml-lab] {self.address_string()} - {fmt % args}")
 
 
@@ -155,7 +208,7 @@ if __name__ == "__main__":
     print(
         f"ML Threshold Tuning Lab listening on port {PORT} | "
         f"{len(X_train)} train / {len(X_validation)} validation / {len(X_test)} test | "
-        f"validation ROC-AUC={validation_auc:.4f} | test ROC-AUC={test_auc:.4f}"
+        f"validation ROC-AUC={validation_auc:.4f} | final test ROC-AUC={test_auc:.4f}"
     )
     try:
         server.serve_forever()
